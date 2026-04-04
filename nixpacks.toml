@@ -2,7 +2,7 @@
 nixPkgs = ["python311", "python311Packages.pip", "gcc", "postgresql"]
 
 [phases.install]
-cmds = ["if [ -f backend/requirements.txt ]; then cd backend; fi; pip install --no-cache-dir -r requirements.txt"]
+cmds = ["if [ -f backend/requirements.txt ]; then cd backend; fi; python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt"]
 
 [start]
-cmd = "if [ -f backend/main.py ]; then cd backend; fi; python3 -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
+cmd = "if [ -f backend/main.py ]; then cd backend; fi; /opt/venv/bin/python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"
