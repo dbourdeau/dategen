@@ -1,12 +1,26 @@
 import { useState } from 'react';
 import PreferencesPage from './pages/Preferences';
 import GenerateIdeasPage from './pages/GenerateIdeas';
+import AuthPage from './pages/Auth';
 import './App.css';
 
 type Page = 'preferences' | 'ideas' | 'reviews';
 
 function App() {
   const [currentPage, setCurrentPage] = useState<Page>('ideas');
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    Boolean(localStorage.getItem('access_token'))
+  );
+
+  const handleLogout = () => {
+    localStorage.removeItem('access_token');
+    setIsAuthenticated(false);
+    setCurrentPage('ideas');
+  };
+
+  if (!isAuthenticated) {
+    return <AuthPage onAuthenticated={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -47,7 +61,10 @@ function App() {
             >
               ⭐ Reviews
             </button>
-            <button className="px-4 py-2 rounded-lg font-semibold text-gray-700 hover:bg-gray-100 transition">
+            <button
+              onClick={handleLogout}
+              className="px-4 py-2 rounded-lg font-semibold text-gray-700 hover:bg-gray-100 transition"
+            >
               👤 Logout
             </button>
           </div>

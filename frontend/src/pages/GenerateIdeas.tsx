@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import axios from 'axios';
 import IdeaCard from '../components/IdeaCard';
 import { ideasAPI } from '../api';
 
@@ -26,7 +27,12 @@ export function GenerateIdeasPage() {
       const response = await ideasAPI.generate();
       setIdeas(response.data);
     } catch (err) {
-      setError('Failed to generate real ideas. Check preferences, auth, and API keys.');
+      if (axios.isAxiosError(err)) {
+        const detail = err.response?.data?.detail;
+        setError(typeof detail === 'string' ? detail : 'Failed to generate ideas.');
+      } else {
+        setError('Failed to generate ideas.');
+      }
     }
     setLoading(false);
   };
