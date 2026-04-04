@@ -5,7 +5,7 @@ import httpx
 import json
 from typing import List, Dict
 
-EXA_API_KEY = os.getenv("EXA_API_KEY", "")
+EXA_API_KEY = (os.getenv("EXA_API_KEY") or "").strip()
 EXA_API_URL = "https://api.exa.ai/search"
 
 
