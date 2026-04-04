@@ -1,3 +1,1 @@
-import App from './App.tsx'
-
-export default App
+/* App-level styles are primarily handled by Tailwind utility classes. */
