@@ -5,11 +5,17 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
-# Get database URL from environment
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://postgres:postgres@localhost:5432/dategen"
-)
+# Get database URL from environment.
+# Railway can provide an empty string when the app service variable is not wired.
+raw_database_url = (os.getenv("DATABASE_URL") or "").strip()
+if not raw_database_url:
+    raise RuntimeError(
+        "DATABASE_URL is missing. Set DATABASE_URL in your app service, "
+        "for example: ${{Postgres.DATABASE_URL}}"
+    )
+
+# Some providers expose postgres://; SQLAlchemy expects postgresql://
+DATABASE_URL = raw_database_url.replace("postgres://", "postgresql://", 1)
 
 # Create engine
 engine = create_engine(
