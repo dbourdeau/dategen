@@ -3,7 +3,7 @@ builder = "nixpacks"
 
 [env]
 OPENROUTER_API_KEY = { value = "", description = "OpenRouter API key for LLM access" }
-SERP_API_KEY = { value = "", description = "SerpAPI key for web search" }
+EXA_API_KEY = { value = "", description = "Exa API key for web search" }
 DATABASE_URL = { description = "PostgreSQL connection string" }
 REDIS_URL = { description = "Redis connection string" }
 CORS_ORIGINS = { value = "https://${{ Railway.domain }}", description = "CORS allowed origins" }
