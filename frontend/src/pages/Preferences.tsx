@@ -1,5 +1,4 @@
-import './index.css';
-import React, { useState, useEffect } from 'react';
+import { useState, type ChangeEvent } from 'react';
 
 interface Preferences {
   budget_min: number;
@@ -46,7 +45,7 @@ export function PreferencesPage() {
     }));
   };
 
-  const handleInterestChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInterestChange = (e: ChangeEvent<HTMLInputElement>) => {
     setPreferences(prev => ({
       ...prev,
       her_interests: e.target.value.split(',').map(i => i.trim()),

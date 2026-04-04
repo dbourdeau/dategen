@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import PreferencesPage from './pages/Preferences';
 import GenerateIdeasPage from './pages/GenerateIdeas';
 import './App.css';

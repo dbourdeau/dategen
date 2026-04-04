@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState } from 'react';
 import IdeaCard from '../components/IdeaCard';
 
 interface DateIdea {
