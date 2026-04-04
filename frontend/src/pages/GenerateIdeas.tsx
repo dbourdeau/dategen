@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import IdeaCard from '../components/IdeaCard';
+import { ideasAPI } from '../api';
 
 interface DateIdea {
   id: string;
@@ -22,36 +23,10 @@ export function GenerateIdeasPage() {
     setLoading(true);
     setError('');
     try {
-      // In real implementation: const response = await ideasAPI.generate()
-      // setIdeas(response.data)
-      
-      // Mock data for now
-      setIdeas([
-        {
-          id: '1',
-          title: 'West Loop Dinner + Riverwalk',
-          description: 'Start with dinner in the West Loop, then take a walk along the Chicago Riverwalk for skyline views.',
-          estimated_cost: 75,
-          duration_minutes: 180,
-          location: 'Chicago',
-          activity_types: ['dining', 'cultural'],
-          reasoning: 'Blends great food with a classic Chicago evening vibe',
-          confidence: 0.87,
-        },
-        {
-          id: '2',
-          title: 'Museum Campus + Lakefront Picnic',
-          description: 'Explore a museum together, then relax with a picnic by the lakefront.',
-          estimated_cost: 40,
-          duration_minutes: 240,
-          location: 'Chicago',
-          activity_types: ['cultural', 'outdoor'],
-          reasoning: 'Great mix of shared experience and easy outdoor time',
-          confidence: 0.92,
-        },
-      ]);
+      const response = await ideasAPI.generate();
+      setIdeas(response.data);
     } catch (err) {
-      setError('Failed to generate ideas. Please try again.');
+      setError('Failed to generate real ideas. Check preferences, auth, and API keys.');
     }
     setLoading(false);
   };

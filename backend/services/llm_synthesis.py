@@ -30,8 +30,7 @@ async def synthesize_ideas(
     """
     
     if not OPENROUTER_API_KEY:
-        # Fallback: return mock ideas
-        return _generate_mock_ideas(city, her_interests)
+        raise RuntimeError("OPENROUTER_API_KEY is not configured")
     
     # Build context
     weighted_interests = sorted(her_interests) if not activity_weights else sorted(
@@ -137,27 +136,7 @@ Return ONLY valid JSON (no extra text) with structure:
                 
                 return ideas_data.get("ideas", [])
             else:
-                print(f"OpenRouter error: {response.status_code}")
-                return _generate_mock_ideas(city, her_interests)
+                raise RuntimeError(f"OpenRouter error: {response.status_code}")
                 
     except Exception as e:
-        print(f"LLM synthesis error: {e}")
-        return _generate_mock_ideas(city, her_interests)
-
-
-def _generate_mock_ideas(city: str, interests: List[str]) -> List[Dict]:
-    """Fallback mock ideas generator."""
-    return [
-        {
-            "title": f"Explore local {interests[0] if interests else 'culture'} scene",
-            "description": f"Discover the best {interests[0] if interests else 'cultural'} spots in {city}.",
-            "estimated_cost": 50,
-            "duration_minutes": 180,
-            "location": city,
-            "activity_types": [interests[0] if interests else "cultural"],
-            "difficulty": "easy",
-            "reasoning": "Matches her interests",
-            "confidence": 0.5,
-            "search_results": {},
-        }
-    ]
+        raise RuntimeError(f"LLM synthesis error: {e}")

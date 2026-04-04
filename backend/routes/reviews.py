@@ -3,22 +3,22 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-from models import DateReview, DateIdea, UserPreferences
+from models import User, DateReview, DateIdea, UserPreferences
 from schemas import DateReviewCreate, DateReviewUpdate, DateReviewResponse
 from services.preference_learn import update_activity_weights, get_top_activities
-import jwt
+from routes.auth import get_current_user
 
 router = APIRouter(prefix="/api/reviews", tags=["reviews"])
 
 
 @router.post("", response_model=DateReviewResponse)
-def create_review(review: DateReviewCreate, token: str = "", db: Session = Depends(get_db)):
+def create_review(
+    review: DateReviewCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Submit a review for a date idea."""
-    try:
-        payload = jwt.decode(token, "your-secret-key-change-in-production", algorithms=["HS256"])
-        user_id = payload.get("sub")
-    except:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    user_id = current_user.id
     
     # Verify idea exists and belongs to user
     idea = db.query(DateIdea).filter(
@@ -53,13 +53,14 @@ def create_review(review: DateReviewCreate, token: str = "", db: Session = Depen
 
 
 @router.get("")
-def list_reviews(skip: int = 0, limit: int = 20, token: str = "", db: Session = Depends(get_db)):
+def list_reviews(
+    skip: int = 0,
+    limit: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """List user's reviews."""
-    try:
-        payload = jwt.decode(token, "your-secret-key-change-in-production", algorithms=["HS256"])
-        user_id = payload.get("sub")
-    except:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    user_id = current_user.id
     
     reviews = (
         db.query(DateReview)
@@ -83,13 +84,14 @@ def list_reviews(skip: int = 0, limit: int = 20, token: str = "", db: Session = 
 
 
 @router.patch("/{review_id}", response_model=DateReviewResponse)
-def update_review(review_id: str, review: DateReviewUpdate, token: str = "", db: Session = Depends(get_db)):
+def update_review(
+    review_id: str,
+    review: DateReviewUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Update a review."""
-    try:
-        payload = jwt.decode(token, "your-secret-key-change-in-production", algorithms=["HS256"])
-        user_id = payload.get("sub")
-    except:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    user_id = current_user.id
     
     db_review = db.query(DateReview).filter(
         DateReview.id == review_id,
@@ -111,13 +113,9 @@ def update_review(review_id: str, review: DateReviewUpdate, token: str = "", db:
 
 
 @router.get("/analytics/top-activities")
-def get_top_activities_endpoint(token: str = "", db: Session = Depends(get_db)):
+def get_top_activities_endpoint(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get top-rated activities for this user."""
-    try:
-        payload = jwt.decode(token, "your-secret-key-change-in-production", algorithms=["HS256"])
-        user_id = payload.get("sub")
-    except:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    user_id = current_user.id
     
     top_activities = get_top_activities(db, user_id, limit=10)
     
@@ -125,13 +123,9 @@ def get_top_activities_endpoint(token: str = "", db: Session = Depends(get_db)):
 
 
 @router.get("/analytics/trends")
-def get_trends(token: str = "", db: Session = Depends(get_db)):
+def get_trends(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get preference trends over time (placeholder)."""
-    try:
-        payload = jwt.decode(token, "your-secret-key-change-in-production", algorithms=["HS256"])
-        user_id = payload.get("sub")
-    except:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    user_id = current_user.id
     
     reviews = (
         db.query(DateReview)

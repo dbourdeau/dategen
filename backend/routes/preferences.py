@@ -6,20 +6,14 @@ from database import get_db
 from models import User, UserPreferences
 from schemas import UserPreferencesCreate, UserPreferencesUpdate, UserPreferencesResponse
 from routes.auth import get_current_user
-import jwt
 
 router = APIRouter(prefix="/api/preferences", tags=["preferences"])
 
 
 @router.get("", response_model=UserPreferencesResponse)
-def get_preferences(token: str = "", db: Session = Depends(get_db)):
+def get_preferences(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Get user's current preferences."""
-    try:
-        # Extract user ID from token
-        payload = jwt.decode(token, "your-secret-key-change-in-production", algorithms=["HS256"])
-        user_id = payload.get("sub")
-    except:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    user_id = current_user.id
     
     prefs = db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
     if not prefs:
@@ -29,13 +23,13 @@ def get_preferences(token: str = "", db: Session = Depends(get_db)):
 
 
 @router.post("", response_model=UserPreferencesResponse)
-def create_preferences(preferences: UserPreferencesCreate, token: str = "", db: Session = Depends(get_db)):
+def create_preferences(
+    preferences: UserPreferencesCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Create or update user preferences."""
-    try:
-        payload = jwt.decode(token, "your-secret-key-change-in-production", algorithms=["HS256"])
-        user_id = payload.get("sub")
-    except:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    user_id = current_user.id
     
     # Check if preferences exist
     existing = db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
@@ -57,13 +51,13 @@ def create_preferences(preferences: UserPreferencesCreate, token: str = "", db: 
 
 
 @router.patch("", response_model=UserPreferencesResponse)
-def update_preferences(preferences: UserPreferencesUpdate, token: str = "", db: Session = Depends(get_db)):
+def update_preferences(
+    preferences: UserPreferencesUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Partially update preferences."""
-    try:
-        payload = jwt.decode(token, "your-secret-key-change-in-production", algorithms=["HS256"])
-        user_id = payload.get("sub")
-    except:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    user_id = current_user.id
     
     db_prefs = db.query(UserPreferences).filter(UserPreferences.user_id == user_id).first()
     if not db_prefs:
