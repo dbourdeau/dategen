@@ -1,5 +1,5 @@
 [phases.setup]
-nixPkgs = ["python311", "gcc", "postgresql"]
+nixPkgs = ["python311", "python311Packages.pip", "gcc", "postgresql"]
 
 [phases.install]
 cmds = ["if [ -f backend/requirements.txt ]; then cd backend; fi; python3 -m pip install --no-cache-dir -r requirements.txt"]
