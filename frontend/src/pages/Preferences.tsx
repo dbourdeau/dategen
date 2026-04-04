@@ -15,7 +15,7 @@ export function PreferencesPage() {
   const [preferences, setPreferences] = useState<Preferences>({
     budget_min: 20,
     budget_max: 150,
-    city: 'Denver',
+    city: 'Chicago',
     activity_types: [],
     her_interests: [],
     dietary_restrictions: [],
@@ -105,7 +105,7 @@ export function PreferencesPage() {
                 setPreferences(prev => ({ ...prev, city: e.target.value }))
               }
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Denver"
+              placeholder="Chicago"
             />
           </div>
 
