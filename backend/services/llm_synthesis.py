@@ -10,6 +10,97 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 DEFAULT_MODEL = "openai/gpt-4o-mini"
 
 
+def _clean_title(title: str) -> str:
+    """Trim noisy title suffixes from search result titles."""
+    for separator in [" | ", " - ", " — "]:
+        if separator in title:
+            return title.split(separator)[0].strip()
+    return title.strip()
+
+
+def _collect_candidates(search_results: Dict) -> Dict[str, List[Dict]]:
+    """Normalize top search results into named venue candidates by bucket."""
+    buckets: Dict[str, List[Dict]] = {}
+    for bucket, items in search_results.items():
+        buckets[bucket] = []
+        for item in items[:8]:
+            title = _clean_title(item.get("title", ""))
+            if not title:
+                continue
+            buckets[bucket].append(
+                {
+                    "title": title,
+                    "link": (item.get("link") or "").strip(),
+                    "snippet": (item.get("snippet") or "").strip().replace("\n", " "),
+                }
+            )
+    return buckets
+
+
+def _build_search_grounded_ideas(
+    city: str,
+    budget_min: int,
+    budget_max: int,
+    search_results: Dict,
+    her_interests: List[str],
+    activity_types: List[str],
+) -> List[Dict]:
+    """Build specific itineraries directly from search results when LLM output is too generic."""
+    candidates = _collect_candidates(search_results)
+    restaurants = candidates.get("restaurants", [])
+    activities = candidates.get("activities", [])
+    events = candidates.get("events", [])
+    reddit = candidates.get("reddit", [])
+    editorial = candidates.get("date_ideas", [])
+
+    ideas: List[Dict] = []
+
+    pairings = [
+        (activities[0] if activities else None, restaurants[0] if restaurants else None, events[0] if events else None),
+        (reddit[0] if reddit else (activities[1] if len(activities) > 1 else None), restaurants[1] if len(restaurants) > 1 else (restaurants[0] if restaurants else None), None),
+        (editorial[0] if editorial else (events[1] if len(events) > 1 else None), restaurants[2] if len(restaurants) > 2 else (restaurants[0] if restaurants else None), activities[2] if len(activities) > 2 else None),
+    ]
+
+    for first_stop, second_stop, third_stop in pairings:
+        stops = [stop for stop in [first_stop, second_stop, third_stop] if stop and stop.get("title")]
+        unique_titles = []
+        for stop in stops:
+            if stop["title"] not in unique_titles:
+                unique_titles.append(stop["title"])
+        if len(unique_titles) < 2:
+            continue
+
+        title = " + ".join(unique_titles[:2])
+        itinerary = " -> ".join(unique_titles)
+        links = [stop.get("link") for stop in stops if stop.get("link")]
+        snippets = [stop.get("snippet") for stop in stops if stop.get("snippet")]
+        interest_text = ", ".join(her_interests[:3]) if her_interests else "shared interests"
+        activity_text = activity_types[:2] if activity_types else ["dining", "cultural"]
+
+        ideas.append(
+            {
+                "title": title,
+                "description": (
+                    f"Start at {unique_titles[0]}, then continue to {unique_titles[1]}"
+                    + (f", and finish at {unique_titles[2]}." if len(unique_titles) > 2 else ".")
+                    + (f" This route is grounded in current web recommendations for {city}." if city else "")
+                ),
+                "estimated_cost": max(budget_min, min(budget_max, int((budget_min + budget_max) / 2))),
+                "duration_minutes": 180 if len(unique_titles) == 2 else 240,
+                "location": itinerary,
+                "activity_types": activity_text,
+                "difficulty": "easy",
+                "reasoning": (
+                    f"Uses specific currently recommended venues and matches interests around {interest_text}."
+                    + (f" Research highlights: {snippets[0][:140]}" if snippets else "")
+                ),
+                "maps_link": links[0] if links else "",
+            }
+        )
+
+    return ideas[:3]
+
+
 def _format_search_context(search_results: Dict) -> str:
     """Format search results into compact venue lines for stronger grounding."""
     lines: List[str] = []
@@ -200,6 +291,20 @@ Return ONLY valid JSON (no extra text) with structure:
 
                 if _validate_specificity(ideas, city, search_results):
                     return ideas
+
+            grounded_ideas = _build_search_grounded_ideas(
+                city=city,
+                budget_min=budget_min,
+                budget_max=budget_max,
+                search_results=search_results,
+                her_interests=her_interests,
+                activity_types=activity_types,
+            )
+            if grounded_ideas:
+                for idea in grounded_ideas:
+                    idea["confidence"] = 0.78
+                    idea["search_results"] = search_results
+                return grounded_ideas
 
             raise RuntimeError("LLM returned ideas that were too generic")
                 
