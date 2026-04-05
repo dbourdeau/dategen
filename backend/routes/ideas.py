@@ -7,7 +7,7 @@ from models import User, UserPreferences, DateIdea
 from routes.auth import get_current_user
 from services.serp_search import search_all
 from services.llm_synthesis import synthesize_ideas
-from services.preference_learn import _calculate_weights_from_reviews
+from services.preference_learn import _calculate_weights_from_reviews, get_context_preferences
 
 router = APIRouter(prefix="/api/ideas", tags=["ideas"])
 
@@ -27,6 +27,7 @@ async def generate_ideas(current_user: User = Depends(get_current_user), db: Ses
     
     # Load activity weights from past reviews
     activity_weights = _calculate_weights_from_reviews(db, user_id)
+    context_preferences = get_context_preferences(db, user_id)
     
     # Fetch past high-rated ideas (for context)
     past_ideas = (
@@ -65,6 +66,7 @@ async def generate_ideas(current_user: User = Depends(get_current_user), db: Ses
                 for idea in past_ideas
             ],
             activity_weights=activity_weights,
+            context_preferences=context_preferences,
         )
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Idea generation failed: {e}")
@@ -72,6 +74,12 @@ async def generate_ideas(current_user: User = Depends(get_current_user), db: Ses
     # Save ideas to database
     saved_ideas = []
     for idea_data in ideas:
+        idea_context = {
+            "search_results": search_results,
+            "stops": idea_data.get("stops", []),
+            "verification": idea_data.get("verification", {}),
+            "score_breakdown": idea_data.get("score_breakdown", {}),
+        }
         db_idea = DateIdea(
             user_id=user_id,
             title=idea_data.get("title", ""),
@@ -85,7 +93,7 @@ async def generate_ideas(current_user: User = Depends(get_current_user), db: Ses
             maps_link=idea_data.get("maps_link"),
             reasoning=idea_data.get("reasoning", ""),
             confidence=idea_data.get("confidence", 0.5),
-            search_results=search_results,
+            search_results=idea_context,
         )
         db.add(db_idea)
         db.flush()  # Flush to get the ID without committing
@@ -110,6 +118,9 @@ async def generate_ideas(current_user: User = Depends(get_current_user), db: Ses
             "maps_link": idea.maps_link,
             "reasoning": idea.reasoning,
             "confidence": idea.confidence,
+            "stops": (idea.search_results or {}).get("stops", []),
+            "verification": (idea.search_results or {}).get("verification", {}),
+            "score_breakdown": (idea.search_results or {}).get("score_breakdown", {}),
             "created_at": idea.created_at,
         }
         for idea in saved_ideas
@@ -174,6 +185,9 @@ def get_idea(idea_id: str, current_user: User = Depends(get_current_user), db: S
         "maps_link": idea.maps_link,
         "reasoning": idea.reasoning,
         "confidence": idea.confidence,
+        "stops": (idea.search_results or {}).get("stops", []),
+        "verification": (idea.search_results or {}).get("verification", {}),
+        "score_breakdown": (idea.search_results or {}).get("score_breakdown", {}),
         "created_at": idea.created_at,
     }
 

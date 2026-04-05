@@ -87,6 +87,22 @@ class DateIdeaBase(BaseModel):
     confidence: Optional[float] = 0.5
 
 
+class IdeaStop(BaseModel):
+    name: str
+    url: str
+    source_domain: Optional[str] = ""
+    reliability: Optional[float] = 0.0
+    freshness: Optional[float] = 0.0
+    neighborhood: Optional[str] = ""
+
+
+class IdeaVerification(BaseModel):
+    status: Optional[str] = "unknown"
+    avg_source_reliability: Optional[float] = 0.0
+    avg_freshness: Optional[float] = 0.0
+    provider_verified_count: Optional[int] = 0
+
+
 class DateIdeaCreate(DateIdeaBase):
     pass
 
@@ -95,6 +111,8 @@ class DateIdeaResponse(DateIdeaBase):
     id: str
     user_id: str
     maps_link: Optional[str] = None
+    stops: Optional[List[IdeaStop]] = []
+    verification: Optional[IdeaVerification] = None
     created_at: datetime
 
     class Config:

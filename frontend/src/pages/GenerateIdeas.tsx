@@ -11,8 +11,23 @@ interface DateIdea {
   duration_minutes: number;
   location: string;
   activity_types: string[];
+  maps_link?: string;
   reasoning: string;
   confidence: number;
+  stops?: Array<{
+    name: string;
+    url: string;
+    source_domain?: string;
+    reliability?: number;
+    freshness?: number;
+    neighborhood?: string;
+  }>;
+  verification?: {
+    status?: string;
+    avg_source_reliability?: number;
+    avg_freshness?: number;
+    provider_verified_count?: number;
+  };
 }
 
 export function GenerateIdeasPage() {
@@ -28,7 +43,8 @@ export function GenerateIdeasPage() {
       setIdeas(response.data);
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        const detail = err.response?.data?.detail;
+        const axiosErr = err as { response?: { data?: { detail?: string } } };
+        const detail = axiosErr.response?.data?.detail;
         setError(typeof detail === 'string' ? detail : 'Failed to generate ideas.');
       } else {
         setError('Failed to generate ideas.');

@@ -9,6 +9,21 @@ interface IdeaCardProps {
     duration_minutes: number;
     location: string;
     activity_types: string[];
+    maps_link?: string;
+    verification?: {
+      status?: string;
+      avg_source_reliability?: number;
+      avg_freshness?: number;
+      provider_verified_count?: number;
+    };
+    stops?: Array<{
+      name: string;
+      url: string;
+      source_domain?: string;
+      reliability?: number;
+      freshness?: number;
+      neighborhood?: string;
+    }>;
   };
 }
 
@@ -51,6 +66,52 @@ export default function IdeaCard({ idea }: IdeaCardProps) {
 
       {showDetails && (
         <div className="mt-4 pt-4 border-t border-gray-200">
+          {idea.verification && (
+            <div className="mb-4 text-sm text-gray-700 space-y-1">
+              <p>
+                Verification: {idea.verification.status || 'unknown'} | Source reliability:{' '}
+                {idea.verification.avg_source_reliability ?? 'n/a'} | Freshness:{' '}
+                {idea.verification.avg_freshness ?? 'n/a'}
+              </p>
+            </div>
+          )}
+
+          {idea.stops && idea.stops.length > 0 && (
+            <div className="mb-4">
+              <p className="text-sm font-semibold text-gray-700 mb-2">Stops and sources</p>
+              <ul className="text-sm text-gray-600 space-y-1">
+                {idea.stops.map((stop) => (
+                  <li key={`${idea.id}-${stop.name}`}>
+                    {stop.url ? (
+                      <a
+                        href={stop.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        {stop.name}
+                      </a>
+                    ) : (
+                      <span>{stop.name}</span>
+                    )}
+                    {stop.source_domain ? ` (${stop.source_domain})` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {idea.maps_link && (
+            <a
+              href={idea.maps_link}
+              target="_blank"
+              rel="noreferrer"
+              className="block mb-4 text-sm text-blue-600 hover:underline"
+            >
+              Primary source link
+            </a>
+          )}
+
           <button className="w-full bg-gradient-to-r from-purple-500 to-blue-500 text-white font-bold py-2 rounded-lg hover:shadow-lg transition">
             Save This Idea
           </button>

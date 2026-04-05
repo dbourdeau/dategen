@@ -115,3 +115,47 @@ def get_top_activities(db: Session, user_id: str, limit: int = 5) -> List[Dict]:
     result.sort(key=lambda x: x["avg_rating"], reverse=True)
     
     return result[:limit]
+
+
+def get_context_preferences(db: Session, user_id: str) -> Dict:
+    """Learn contextual preferences from past positively rated dates."""
+    reviews = (
+        db.query(DateReview)
+        .filter(DateReview.user_id == user_id)
+        .all()
+    )
+
+    if not reviews:
+        return {
+            "top_neighborhood_tokens": [],
+            "preferred_duration_minutes": None,
+        }
+
+    neighborhood_counts: Dict[str, int] = {}
+    durations: List[int] = []
+
+    for review in reviews:
+        if review.rating < 4:
+            continue
+        idea = review.date_idea
+        if not idea:
+            continue
+
+        durations.append(idea.duration_minutes)
+        location = (idea.location or "").replace("->", " ")
+        for token in location.split():
+            normalized = token.strip(",.()[]{}-").lower()
+            if len(normalized) < 4:
+                continue
+            neighborhood_counts[normalized] = neighborhood_counts.get(normalized, 0) + 1
+
+    top_neighborhood_tokens = [
+        token for token, _ in sorted(neighborhood_counts.items(), key=lambda x: x[1], reverse=True)[:6]
+    ]
+
+    preferred_duration = int(sum(durations) / len(durations)) if durations else None
+
+    return {
+        "top_neighborhood_tokens": top_neighborhood_tokens,
+        "preferred_duration_minutes": preferred_duration,
+    }
