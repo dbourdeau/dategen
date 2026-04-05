@@ -27,6 +27,13 @@ GENERIC_TITLE_MARKERS = [
     "unique date ideas",
     "hidden gem date spots",
     "reddit",
+        "where to go on a date",
+        "recommended romantic",
+        "right now",
+        "where to go",
+        "things to do in",
+        "inexpensive romantic",
+        "valentine",
 ]
 
 
@@ -116,6 +123,20 @@ def _collect_candidates(search_results: Dict, city: str) -> Dict[str, List[Dict]
     return buckets
 
 
+def _is_usable_stop(candidate: Dict) -> bool:
+    """Validate that a candidate looks like a real place/venue stop."""
+    title = (candidate.get("title") or "").strip()
+    if not title:
+        return False
+    if _looks_like_generic_title(title):
+        return False
+    if "..." in title:
+        return False
+    if len(title.split()) < 2:
+        return False
+    return True
+
+
 def _build_search_grounded_ideas(
     city: str,
     budget_min: int,
@@ -126,22 +147,50 @@ def _build_search_grounded_ideas(
 ) -> List[Dict]:
     """Build specific itineraries directly from search results when LLM output is too generic."""
     candidates = _collect_candidates(search_results, city)
-    restaurants = candidates.get("restaurants", [])
-    activities = candidates.get("activities", [])
-    events = candidates.get("events", [])
+    restaurants = [c for c in candidates.get("restaurants", []) if _is_usable_stop(c)]
+    activities = [c for c in candidates.get("activities", []) if _is_usable_stop(c)]
+    events = [c for c in candidates.get("events", []) if _is_usable_stop(c)]
     reddit = candidates.get("reddit", [])
     editorial = candidates.get("date_ideas", [])
 
     ideas: List[Dict] = []
 
-    pairings = [
-        (activities[0] if activities else None, restaurants[0] if restaurants else None, events[0] if events else None),
-        (reddit[0] if reddit else (activities[1] if len(activities) > 1 else None), restaurants[1] if len(restaurants) > 1 else (restaurants[0] if restaurants else None), None),
-        (editorial[0] if editorial else (events[1] if len(events) > 1 else None), restaurants[2] if len(restaurants) > 2 else (restaurants[0] if restaurants else None), activities[2] if len(activities) > 2 else None),
+    used_titles = set()
+
+    def pop_next(bucket: List[Dict]) -> Optional[Dict]:
+        for candidate in bucket:
+            title = candidate.get("title", "")
+            if title and title not in used_titles and _is_usable_stop(candidate):
+                used_titles.add(title)
+                return candidate
+        return None
+
+    templates = [
+        ["activities", "restaurants", "events"],
+        ["events", "restaurants", "activities"],
+        ["activities", "restaurants"],
     ]
 
-    for first_stop, second_stop, third_stop in pairings:
-        stops = [stop for stop in [first_stop, second_stop, third_stop] if stop and stop.get("title")]
+    pool = {
+        "restaurants": restaurants,
+        "activities": activities,
+        "events": events,
+    }
+
+    for template in templates:
+        stops = [pop_next(pool[key]) for key in template]
+        stops = [stop for stop in stops if stop and stop.get("title")]
+
+        if len(stops) < 2:
+            fallback_pool = restaurants + activities + events
+            for candidate in fallback_pool:
+                title = candidate.get("title", "")
+                if title and title not in used_titles and _is_usable_stop(candidate):
+                    used_titles.add(title)
+                    stops.append(candidate)
+                if len(stops) >= 2:
+                    break
+
         unique_titles = []
         for stop in stops:
             if stop["title"] not in unique_titles:
@@ -155,6 +204,8 @@ def _build_search_grounded_ideas(
         snippets = [stop.get("snippet") for stop in stops if stop.get("snippet")]
         interest_text = ", ".join(her_interests[:3]) if her_interests else "shared interests"
         activity_text = activity_types[:2] if activity_types else ["dining", "cultural"]
+        editorial_hint = (editorial[0].get("title") if editorial else "")
+        reddit_hint = (reddit[0].get("title") if reddit else "")
 
         ideas.append(
             {
@@ -172,6 +223,8 @@ def _build_search_grounded_ideas(
                 "reasoning": (
                     f"Uses specific currently recommended venues and matches interests around {interest_text}."
                     + (f" Research highlights: {snippets[0][:140]}" if snippets else "")
+                    + (f" Editorial signal: {editorial_hint}." if editorial_hint else "")
+                    + (f" Reddit signal: {reddit_hint}." if reddit_hint else "")
                 ),
                 "maps_link": links[0] if links else "",
             }
@@ -200,7 +253,7 @@ def _collect_candidate_titles(search_results: Dict) -> List[str]:
     for bucket in search_results.keys():
         for item in search_results.get(bucket, [])[:5]:
             title = (item.get("title") or "").strip()
-            if title:
+            if title and not _looks_like_generic_title(title):
                 titles.append(title)
     return titles
 
