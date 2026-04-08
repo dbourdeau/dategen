@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from database import init_db
-from routes import auth, preferences, ideas, reviews
+from routes import auth, preferences, ideas, reviews, catalog
 
 # Initialize database
 init_db()
@@ -33,6 +33,7 @@ app.include_router(auth.router)
 app.include_router(preferences.router)
 app.include_router(ideas.router)
 app.include_router(reviews.router)
+app.include_router(catalog.router)
 
 FRONTEND_DIR = Path(__file__).resolve().parent / "static"
 if (FRONTEND_DIR / "assets").exists():

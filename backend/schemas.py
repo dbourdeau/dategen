@@ -1,6 +1,6 @@
 """Pydantic schemas for request/response validation."""
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, List
 from pydantic import BaseModel, EmailStr
 
@@ -168,3 +168,45 @@ class ActivityScore(BaseModel):
 
 class TopActivitiesResponse(BaseModel):
     top_activities: List[ActivityScore]
+
+
+# Curated catalog schemas
+class CuratedVenueBase(BaseModel):
+    city: str
+    category: str
+    name: str
+    url: str
+    snippet: Optional[str] = ""
+    curated_rank: Optional[int] = 50
+    estimated_cost: Optional[float] = None
+    tags: Optional[List[str]] = []
+    opening_date: Optional[date] = None
+    event_date: Optional[datetime] = None
+    is_active: Optional[bool] = True
+
+
+class CuratedVenueCreate(CuratedVenueBase):
+    pass
+
+
+class CuratedVenueUpdate(BaseModel):
+    category: Optional[str] = None
+    name: Optional[str] = None
+    url: Optional[str] = None
+    snippet: Optional[str] = None
+    curated_rank: Optional[int] = None
+    estimated_cost: Optional[float] = None
+    tags: Optional[List[str]] = None
+    opening_date: Optional[date] = None
+    event_date: Optional[datetime] = None
+    is_active: Optional[bool] = None
+
+
+class CuratedVenueResponse(CuratedVenueBase):
+    id: str
+    source_domain: Optional[str] = ""
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

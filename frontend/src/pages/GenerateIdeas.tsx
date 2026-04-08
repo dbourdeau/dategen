@@ -40,7 +40,7 @@ export function GenerateIdeasPage() {
     setError('');
     try {
       const response = await ideasAPI.generate();
-      setIdeas(response.data);
+      setIdeas((response.data as DateIdea[]) || []);
     } catch (err) {
       if (axios.isAxiosError(err)) {
         const axiosErr = err as { response?: { data?: { detail?: string } } };
@@ -58,13 +58,15 @@ export function GenerateIdeasPage() {
       <div className="max-w-4xl mx-auto">
         <h1 className="text-4xl font-bold text-gray-800 mb-8">Generate Date Ideas</h1>
 
-        <button
-          onClick={handleGenerateIdeas}
-          disabled={loading}
-          className="mb-8 bg-gradient-to-r from-purple-500 to-blue-500 text-white font-bold py-3 px-8 rounded-lg hover:shadow-lg transition disabled:opacity-50"
-        >
-          {loading ? 'Generating...' : '✨ Get Date Ideas'}
-        </button>
+        <div className="mb-8 flex flex-wrap gap-3">
+          <button
+            onClick={handleGenerateIdeas}
+            disabled={loading}
+            className="bg-gradient-to-r from-purple-500 to-blue-500 text-white font-bold py-3 px-8 rounded-lg hover:shadow-lg transition disabled:opacity-50"
+          >
+            {loading ? 'Generating...' : '✨ Get Date Ideas'}
+          </button>
+        </div>
 
         {error && (
           <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -78,7 +80,7 @@ export function GenerateIdeasPage() {
               <p className="text-gray-600 text-lg">Click "Get Date Ideas" to start planning!</p>
             </div>
           ) : (
-            ideas.map(idea => <IdeaCard key={idea.id} idea={idea} />)
+            ideas.map((idea: DateIdea) => <IdeaCard key={idea.id} idea={idea} />)
           )}
         </div>
       </div>

@@ -3,6 +3,7 @@
 import json
 import os
 import re
+from datetime import datetime
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 from urllib.parse import urlparse
@@ -65,6 +66,7 @@ class VenueCandidate:
     freshness: float
     neighborhood: str
     tags: List[str]
+    event_date: Optional[datetime] = None
 
 
 @dataclass
@@ -89,7 +91,25 @@ def _looks_generic(title: str) -> bool:
         return True
     if "?" in lowered or "..." in lowered:
         return True
+    if any(token in lowered for token in [" tickets", " ticket", "eventbrite", "from "]):
+        return True
     return any(marker in lowered for marker in GENERIC_TITLE_MARKERS)
+
+
+def _canonical_bucket(bucket: str, name: str, snippet: str) -> str:
+    """Map noisy source buckets into itinerary buckets used by the ranker."""
+    if bucket in {"restaurants", "activities", "events", "low_cost"}:
+        return bucket
+
+    lowered = f"{name} {snippet}".lower()
+
+    if any(token in lowered for token in ["restaurant", "bar", "tavern", "bistro", "brasserie", "cafe"]):
+        return "restaurants"
+    if any(token in lowered for token in ["concert", "show", "festival", "comedy", "tickets", "event"]):
+        return "events"
+    if any(token in lowered for token in ["walk", "riverwalk", "trail", "bike", "park", "museum", "gallery", "zoo"]):
+        return "low_cost"
+    return "activities"
 
 
 def _domain(url: str) -> str:
@@ -108,13 +128,73 @@ def _reliability_for_domain(domain: str) -> float:
     return 0.6
 
 
-def _freshness_score(text: str) -> float:
+def _parse_event_date(text: str) -> Optional[datetime]:
+    """Parse event date from common title/snippet formats."""
+    lowered = text.lower()
+    today_year = datetime.utcnow().year
+
+    # ISO style: 2026-04-05
+    iso_match = re.search(r"\b(20\d{2})-(\d{1,2})-(\d{1,2})\b", lowered)
+    if iso_match:
+        try:
+            return datetime(int(iso_match.group(1)), int(iso_match.group(2)), int(iso_match.group(3)))
+        except ValueError:
+            return None
+
+    month_map = {
+        "jan": 1,
+        "feb": 2,
+        "mar": 3,
+        "apr": 4,
+        "may": 5,
+        "jun": 6,
+        "jul": 7,
+        "aug": 8,
+        "sep": 9,
+        "oct": 10,
+        "nov": 11,
+        "dec": 12,
+    }
+
+    month_day = re.search(
+        r"\b(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)?,?\s*"
+        r"(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)"
+        r"\s+(\d{1,2})(?:,\s*(20\d{2}))?\b",
+        lowered,
+    )
+    if month_day:
+        month_text = month_day.group(1)[:3]
+        day = int(month_day.group(2))
+        year = int(month_day.group(3)) if month_day.group(3) else today_year
+        month = month_map.get(month_text)
+        if month:
+            try:
+                return datetime(year, month, day)
+            except ValueError:
+                return None
+
+    return None
+
+
+def _freshness_score(text: str, event_date: Optional[datetime] = None) -> float:
     lowered = text.lower()
     score = 0.55
     if any(token in lowered for token in ["today", "tonight", "this weekend", "this week"]):
         score += 0.35
     if any(token in lowered for token in ["updated", "new", "opening", "current"]):
         score += 0.1
+
+    if event_date:
+        day_delta = (event_date.date() - datetime.utcnow().date()).days
+        if day_delta < 0:
+            return 0.05
+        if day_delta <= 14:
+            score += 0.35
+        elif day_delta <= 45:
+            score += 0.2
+        else:
+            score += 0.05
+
     return max(0.0, min(1.0, score))
 
 
@@ -158,8 +238,14 @@ def _normalize_candidates(search_results: Dict, city: str) -> List[VenueCandidat
             url = (item.get("link") or "").strip()
             domain = _domain(url)
             reliability = _reliability_for_domain(domain)
-            freshness = _freshness_score(" ".join([title, snippet]))
             neighborhood = _extract_neighborhood(snippet)
+
+            canonical_bucket = _canonical_bucket(bucket, title, snippet)
+            event_date = _parse_event_date(" ".join([title, snippet])) if canonical_bucket == "events" else None
+            if canonical_bucket == "events" and event_date and event_date.date() < datetime.utcnow().date():
+                continue
+
+            freshness = _freshness_score(" ".join([title, snippet]), event_date)
 
             if title and not _looks_generic(title):
                 candidates.append(
@@ -167,12 +253,13 @@ def _normalize_candidates(search_results: Dict, city: str) -> List[VenueCandidat
                         name=title,
                         url=url,
                         snippet=snippet,
-                        bucket=bucket,
+                        bucket=canonical_bucket,
                         domain=domain,
                         reliability=reliability,
                         freshness=freshness,
                         neighborhood=neighborhood,
-                        tags=[bucket],
+                        tags=[bucket, canonical_bucket],
+                        event_date=event_date,
                     )
                 )
 
@@ -182,12 +269,13 @@ def _normalize_candidates(search_results: Dict, city: str) -> List[VenueCandidat
                         name=extracted,
                         url=url,
                         snippet=snippet,
-                        bucket=bucket,
+                        bucket=canonical_bucket,
                         domain=domain,
                         reliability=reliability,
                         freshness=freshness,
                         neighborhood=neighborhood,
-                        tags=[bucket],
+                        tags=[bucket, canonical_bucket],
+                        event_date=event_date,
                     )
                 )
 
@@ -213,6 +301,18 @@ def _is_usable_stop(stop: VenueCandidate) -> bool:
     return True
 
 
+def _is_relaxed_stop(stop: VenueCandidate) -> bool:
+    """Looser stop validation for emergency fallback when retrieval quality is poor."""
+    if not stop.name or not stop.url:
+        return False
+    lowered = stop.name.lower().strip()
+    if not lowered:
+        return False
+    if any(marker in lowered for marker in ["best ", "top ", "things to do", "date ideas"]):
+        return False
+    return True
+
+
 def _bucket(candidates: List[VenueCandidate], bucket_name: str) -> List[VenueCandidate]:
     return [candidate for candidate in candidates if candidate.bucket == bucket_name and _is_usable_stop(candidate)]
 
@@ -233,6 +333,7 @@ def _generate_itinerary_candidates(
     restaurants = _bucket(normalized, "restaurants")
     activities = _bucket(normalized, "activities")
     events = _bucket(normalized, "events")
+    low_cost = _bucket(normalized, "low_cost")
 
     itineraries: List[ItineraryCandidate] = []
     used_keys = set()
@@ -294,6 +395,39 @@ def _generate_itinerary_candidates(
         for restaurant in restaurants[:6]:
             add_itinerary([event, restaurant], ["entertainment", "dining"])
 
+    # Budget-friendly templates: low-cost activity + casual food or coffee option.
+    for low in low_cost[:6]:
+        for restaurant in restaurants[:4]:
+            add_itinerary([low, restaurant], ["outdoor", "dining"])
+
+    # Very low-budget option with two free/cheap activities.
+    for first in low_cost[:5]:
+        for second in low_cost[:5]:
+            if first.name.lower() != second.name.lower():
+                add_itinerary([first, second], ["outdoor", "cultural"])
+
+    if not itineraries:
+        # Fallback path: pair highest-quality distinct stops even when bucket coverage is sparse.
+        usable = [candidate for candidate in normalized if _is_usable_stop(candidate)]
+        if len(usable) < 2:
+            usable = [candidate for candidate in normalized if _is_relaxed_stop(candidate)]
+
+        usable = sorted(
+            usable,
+            key=lambda candidate: (candidate.reliability * 0.65 + candidate.freshness * 0.35),
+            reverse=True,
+        )
+        for index, first in enumerate(usable[:10]):
+            for second in usable[index + 1:12]:
+                if first.name.lower() == second.name.lower():
+                    continue
+                add_itinerary([first, second], ["dining", "cultural"])
+                if len(itineraries) >= 8:
+                    return itineraries
+
+        if not itineraries and len(usable) >= 2:
+            add_itinerary([usable[0], usable[1]], ["dining", "cultural"])
+
     return itineraries[:15]
 
 
@@ -313,6 +447,7 @@ def _rank_itineraries(
     context_preferences: Optional[Dict],
 ) -> List[ItineraryCandidate]:
     past_titles = [item.get("title", "") for item in (past_high_rated_ideas or [])]
+    past_titles_blob = " ".join(past_titles).lower()
 
     for itinerary in itineraries:
         text_blob = " ".join(stop.name + " " + stop.snippet for stop in itinerary.stops)
@@ -322,10 +457,8 @@ def _rank_itineraries(
             weight_boost = sum(activity_weights.get(t, 0.0) for t in itinerary.activity_types[:2]) / 2
             preference = min(1.0, preference + weight_boost * 0.25)
 
-        novelty_penalty = _overlap_ratio(
-            " ".join(stop.name for stop in itinerary.stops),
-            past_titles,
-        )
+        repeated_stops = sum(1 for stop in itinerary.stops if stop.name.lower() in past_titles_blob)
+        novelty_penalty = repeated_stops / max(1, len(itinerary.stops))
         novelty = max(0.0, 1.0 - novelty_penalty)
 
         context_boost = 0.0
@@ -359,7 +492,19 @@ def _rank_itineraries(
             + s["novelty"] * 0.10
         )
 
-    return sorted(itineraries, key=total_score, reverse=True)
+    ranked = sorted(itineraries, key=total_score, reverse=True)
+
+    diversified: List[ItineraryCandidate] = []
+    used_stop_names = set()
+    for itinerary in ranked:
+        itinerary_names = {stop.name.lower() for stop in itinerary.stops}
+        overlap = len(itinerary_names.intersection(used_stop_names))
+        if diversified and overlap >= 2:
+            continue
+        diversified.append(itinerary)
+        used_stop_names.update(itinerary_names)
+
+    return diversified or ranked
 
 
 def _deterministic_idea(city: str, itinerary: ItineraryCandidate) -> Dict:
@@ -536,7 +681,13 @@ async def synthesize_ideas(
         activity_types=activity_types,
     )
     if not itineraries:
-        raise RuntimeError("No valid venue-specific itineraries could be built")
+        buckets = {
+            "restaurants": len([c for c in normalized if c.bucket == "restaurants"]),
+            "activities": len([c for c in normalized if c.bucket == "activities"]),
+            "events": len([c for c in normalized if c.bucket == "events"]),
+            "low_cost": len([c for c in normalized if c.bucket == "low_cost"]),
+        }
+        raise RuntimeError(f"No valid venue-specific itineraries could be built (bucket_counts={buckets})")
 
     ranked = _rank_itineraries(
         itineraries=itineraries,

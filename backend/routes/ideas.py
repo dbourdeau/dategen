@@ -45,6 +45,7 @@ async def generate_ideas(current_user: User = Depends(get_current_user), db: Ses
             budget=prefs.budget_max,
             interests=prefs.her_interests,
             restrictions=prefs.dietary_restrictions,
+            db=db,
         )
 
         # LLM synthesis

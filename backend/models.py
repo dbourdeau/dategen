@@ -2,7 +2,7 @@
 
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Float, Boolean, Text, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, String, Integer, Float, Boolean, Text, DateTime, Date, ForeignKey, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from database import Base
@@ -129,3 +129,25 @@ class DateReview(Base):
     # Relationships
     date_idea = relationship("DateIdea", back_populates="reviews")
     user = relationship("User", back_populates="date_reviews")
+
+
+class CuratedVenue(Base):
+    """Curated venues and ideas managed by admins for baseline recommendation quality."""
+    __tablename__ = "curated_venues"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    city = Column(String(255), nullable=False, index=True)
+    category = Column(String(50), nullable=False, index=True)  # restaurants, activities, events, low_cost, new_openings
+    name = Column(String(255), nullable=False)
+    url = Column(String(1000), nullable=False)
+    snippet = Column(Text, default="")
+    source_domain = Column(String(255), default="")
+    curated_rank = Column(Integer, default=50)
+    estimated_cost = Column(Float, nullable=True)
+    tags = Column(JSON, default=[])
+    opening_date = Column(Date, nullable=True)
+    event_date = Column(DateTime, nullable=True)
+    is_active = Column(Boolean, default=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime, nullable=True)
